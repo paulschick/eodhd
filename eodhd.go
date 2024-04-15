@@ -44,6 +44,29 @@ func NewClient(token string) (*Client, error) {
 	return client, nil
 }
 
+type UrlClient interface {
+	GetApiToken() string
+	GetCountryCode() string
+	GetBaseUrl() *url.URL
+	GetDefaultFormat() RequestFormat
+}
+
+func (c *Client) GetApiToken() string {
+	return c.apiToken
+}
+
+func (c *Client) GetCountryCode() string {
+	return c.countryCode
+}
+
+func (c *Client) GetBaseUrl() *url.URL {
+	return c.baseUrl
+}
+
+func (c *Client) GetDefaultFormat() RequestFormat {
+	return c.defaultFormat
+}
+
 func (c *Client) setBaseUrl(urlStr string) error {
 	if !strings.HasSuffix(urlStr, "/") {
 		urlStr += "/"
