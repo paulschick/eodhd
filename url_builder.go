@@ -2,85 +2,76 @@ package eodhd
 
 import (
 	"fmt"
+	"github.com/google/go-querystring/query"
 	"net/url"
 	"time"
 )
 
-type UrlParams struct {
-	Symbol string
-	Format *RequestFormat
-	From   *time.Time
-	To     *time.Time
-}
-
 type UrlBuilder struct {
-	currentUrl *url.URL
-	client     UrlClient
+	currentURL *url.URL
+	c          UrlClient
 }
 
 func NewUrlBuilder(c UrlClient) *UrlBuilder {
 	return &UrlBuilder{
-		currentUrl: c.GetBaseUrl(),
-		client:     c,
+		c:          c,
+		currentURL: c.GetBaseUrl(),
 	}
 }
 
-func (u *UrlBuilder) SetRequestSymbol(symbol string) {
-	u.currentUrl = u.currentUrl.JoinPath(fmt.Sprintf("%s.%s", symbol, u.client.GetCountryCode()))
+type UrlParams struct {
+	Symbol   string         `url:"-"`
+	Format   *RequestFormat `url:"fmt"`
+	FromTime *time.Time     `url:"-"`
+	ToTime   *time.Time     `url:"-"`
+	From     *string        `url:"from,omitempty"`
+	To       *string        `url:"from,omitempty"`
+	ApiKey   string         `url:"api_key"`
 }
 
-func (u *UrlBuilder) SetApiKeyParam() {
-	values := u.currentUrl.Query()
-	values.Add("api_key", u.client.GetApiToken())
-	u.currentUrl.RawQuery = values.Encode()
+type UrlParamProvider interface {
+	GetSymbol() string
+	Encode() (string, error)
 }
 
-func (u *UrlBuilder) SetFormat(format RequestFormat) {
-	values := u.currentUrl.Query()
-	values.Add("fmt", string(format))
-	u.currentUrl.RawQuery = values.Encode()
+func (u *UrlParams) GetSymbol() string {
+	return u.Symbol
 }
 
-func (u *UrlBuilder) SetFrom(from time.Time) {
-	fromStr := from.Format(urlDateFormat)
-	values := u.currentUrl.Query()
-	values.Add("from", fromStr)
-	u.currentUrl.RawQuery = values.Encode()
-}
-
-func (u *UrlBuilder) SetTo(to time.Time) {
-	toStr := to.Format(urlDateFormat)
-	values := u.currentUrl.Query()
-	values.Add("to", toStr)
-	u.currentUrl.RawQuery = values.Encode()
-}
-
-func (u *UrlBuilder) ResetUrl() {
-	u.currentUrl = u.client.GetBaseUrl()
-}
-
-func (u *UrlBuilder) BuildUrl(urlParams *UrlParams) string {
-	if urlParams.Symbol == "" {
-		return u.currentUrl.String()
+func (u *UrlParams) Encode() (string, error) {
+	if u.FromTime != nil {
+		from := u.FromTime.Format(urlDateFormat)
+		u.From = &from
 	}
-
-	var format RequestFormat
-	if urlParams.Format == nil {
-		format = u.client.GetDefaultFormat()
-	} else {
-		format = *urlParams.Format
+	if u.ToTime != nil {
+		to := u.ToTime.Format(urlDateFormat)
+		u.To = &to
 	}
-
-	u.SetRequestSymbol(urlParams.Symbol)
-	u.SetApiKeyParam()
-	u.SetFormat(format)
-
-	if urlParams.From != nil {
-		u.SetFrom(*urlParams.From)
+	q, err := query.Values(u)
+	if err != nil {
+		return "", err
 	}
-	if urlParams.To != nil {
-		u.SetTo(*urlParams.To)
-	}
+	return q.Encode(), nil
+}
 
-	return u.currentUrl.String()
+func (u *UrlBuilder) SetOptions(options UrlParamProvider) error {
+	if options == nil {
+		return nil
+	}
+	q, err := options.Encode()
+	if err != nil {
+		return err
+	}
+	u.currentURL.RawQuery = q
+	return nil
+}
+
+func (u *UrlBuilder) BuildUrl(params UrlParamProvider) (string, error) {
+	u.currentURL = u.c.GetBaseUrl()
+	u.currentURL = u.currentURL.JoinPath(fmt.Sprintf("%s.%s", params.GetSymbol(), u.c.GetCountryCode()))
+	err := u.SetOptions(params)
+	if err != nil {
+		return "", err
+	}
+	return u.currentURL.String(), nil
 }

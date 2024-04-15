@@ -1,7 +1,6 @@
 package eodhd
 
 import (
-	"fmt"
 	"net/url"
 	"testing"
 	"time"
@@ -32,38 +31,50 @@ func (t *testUrlProvider) GetDefaultFormat() RequestFormat {
 	return FormatCSV
 }
 
-func TestUrlBuilder_BuildUrl(t *testing.T) {
-	form := FormatJson
-	paramsNoTime := &UrlParams{
-		Symbol: "AAPL",
-		Format: &form,
-		From:   nil,
-		To:     nil,
-	}
+func TestUrlBuilder_BuildUrl_NoTime(t *testing.T) {
 	urlProvider := &testUrlProvider{
 		BaseUrlStr: "https://test.com/api/",
 		ApiKey:     "test-key",
 	}
+	expected1 := "https://test.com/api/AAPL.US?api_key=test-key&fmt=json"
+	builder := NewUrlBuilder(urlProvider)
+	format1 := FormatJson
+	params := &UrlParams{
+		Symbol: "AAPL",
+		ApiKey: "test-key",
+		Format: &format1,
+	}
+
+	urlStr1, err := builder.BuildUrl(params)
+	if err != nil {
+		t.Error("error getting url: ", err)
+	}
+	if urlStr1 != expected1 {
+		t.Errorf("expected %s, got %s", expected1, urlStr1)
+	}
+}
+
+func TestUrlBuilder_BuildUrl_FromTime(t *testing.T) {
+	urlProvider := &testUrlProvider{
+		BaseUrlStr: "https://test.com/api/",
+		ApiKey:     "test-key",
+	}
+	fromTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	expected := "https://test.com/api/AAPL.US?api_key=test-key&fmt=csv&from=2024-01-01"
 	builder := NewUrlBuilder(urlProvider)
 
-	expected1 := "https://test.com/api/AAPL.US?api_key=test-key&fmt=json"
-	u1 := builder.BuildUrl(paramsNoTime)
-	if u1 != expected1 {
-		t.Errorf("expected URL: %s, got %s", expected1, u1)
+	format := FormatCSV
+	params := &UrlParams{
+		Symbol:   "AAPL",
+		ApiKey:   "test-key",
+		Format:   &format,
+		FromTime: &fromTime,
 	}
-
-	// 2024-01-01
-	fromTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	paramsWithTime := &UrlParams{
-		Symbol: "AAPL",
-		Format: nil,
-		From:   &fromTime,
-		To:     nil,
+	result, err := builder.BuildUrl(params)
+	if err != nil {
+		t.Error(err)
 	}
-	expected2 := "https://test.com/api/AAPL.US?api_key=test-key&fmt=csv&from=2024-01-01"
-
-	builder.ResetUrl()
-	u2 := builder.BuildUrl(paramsWithTime)
-	fmt.Println(expected2)
-	fmt.Println(u2)
+	if result != expected {
+		t.Errorf("expected %s, got %s", expected, result)
+	}
 }

@@ -9,11 +9,15 @@ import (
 type RequestFormat string
 
 const (
-	defaultBaseUrl                   = "https://eodhd.com/api/eod/"
-	defaultCountryCode               = "US"
-	urlDateFormat                    = "2006-01-02"
-	FormatJson         RequestFormat = "json"
-	FormatCSV          RequestFormat = "csv"
+	defaultBaseUrl     = "https://eodhd.com/api/eod/"
+	defaultCountryCode = "US"
+	urlDateFormat      = "2006-01-02"
+	userAgent          = "go-eodhd"
+)
+
+const (
+	FormatJson RequestFormat = "json"
+	FormatCSV  RequestFormat = "csv"
 )
 
 type Client struct {
@@ -22,6 +26,7 @@ type Client struct {
 	apiToken      string
 	countryCode   string
 	defaultFormat RequestFormat
+	UserAgent     string
 
 	// services
 	urlBuilder *UrlBuilder
@@ -33,6 +38,7 @@ func NewClient(token string) (*Client, error) {
 		client:        &http.Client{},
 		countryCode:   defaultCountryCode,
 		defaultFormat: FormatCSV,
+		UserAgent:     userAgent,
 	}
 	err := client.setBaseUrl(defaultBaseUrl)
 	if err != nil {
@@ -60,7 +66,8 @@ func (c *Client) GetCountryCode() string {
 }
 
 func (c *Client) GetBaseUrl() *url.URL {
-	return c.baseUrl
+	u := *c.baseUrl
+	return &u
 }
 
 func (c *Client) GetDefaultFormat() RequestFormat {
@@ -81,7 +88,8 @@ func (c *Client) setBaseUrl(urlStr string) error {
 	return nil
 }
 
-func (c *Client) BuildUrl(params *UrlParams) string {
-	c.urlBuilder.ResetUrl()
+// BuildUrl TODO building the URL params should potentially be exposed through the client.
+// Otherwise, this could be good enough for now
+func (c *Client) BuildUrl(params UrlParamProvider) (string, error) {
 	return c.urlBuilder.BuildUrl(params)
 }
