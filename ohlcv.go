@@ -1,3 +1,6 @@
+// Copyright (c) Paul Schick
+// SPDX-License-Identifier: MPL-2.0
+
 package eodhd
 
 import "time"
@@ -13,7 +16,7 @@ type Ohlcv struct {
 	Volume   float64 `csv:"Volume" json:"volume"`
 
 	// Set via ParseDate from standard urlDateFormat
-	DateParsed *time.Time
+	DateParsed *time.Time `csv:"-" json:"-"`
 }
 
 func (o *Ohlcv) ParseDate() error {
