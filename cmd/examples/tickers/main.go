@@ -18,15 +18,13 @@ func main() {
 		log.Fatalf("error creating client: %s", err)
 	}
 
-	exchanges, res, err := client.ExchangesService.GetExchanges()
+	tickers, res, err := client.TickerService.GetTickers("US", eodhd.GetFormatCsv())
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Exchanges request status: %d\n", res.StatusCode)
-	fmt.Printf("returned %d exchanges\n", len(exchanges))
-
-	for i, exchange := range exchanges {
-		fmt.Printf("(%d) %s, %s, %s\n", i, exchange.Name, exchange.Country, exchange.Code)
+	fmt.Println("tickers response code: ", res.StatusCode)
+	for i, t := range tickers {
+		fmt.Printf("(%d) %s - %s\n", i, t.Name, t.Code)
 	}
 }
