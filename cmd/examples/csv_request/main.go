@@ -21,22 +21,11 @@ func main() {
 
 	from := time.Date(2024, 4, 1, 1, 0, 0, 0, time.Local)
 
-	params := &eodhd.UrlParams{
-		ApiToken: apiKey,
-		Format:   eodhd.GetFormatCsv(),
-		FromTime: &from,
-		Symbol:   "AAPL",
-	}
-
-	data, resp, err := client.OhlcvService.GetCandles(params)
+	data, res, err := client.OhlcvService.GetOhlcv("AAPL", eodhd.GetPtrString("US"), eodhd.GetFormatCsv(), eodhd.GetPtrTime(from), nil)
 	if err != nil {
-		log.Fatalf("error retrieving candles: %s", err)
+		log.Fatal(err)
 	}
 
-	fmt.Printf("Status code: %d\n", resp.StatusCode)
-	fmt.Printf("retrieved %d candles for %s\n", len(data), params.Symbol)
-
-	lastCandle := data[len(data)-1]
-	_ = lastCandle.ParseDate()
-	fmt.Println(lastCandle)
+	fmt.Println("status: ", res.StatusCode)
+	fmt.Println("number of records returned: ", len(data))
 }

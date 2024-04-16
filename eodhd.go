@@ -20,7 +20,7 @@ import (
 type RequestFormat string
 
 const (
-	defaultBaseUrl     = "https://eodhd.com/api/eod/"
+	defaultBaseUrl     = "https://eodhd.com/api/"
 	defaultCountryCode = "US"
 	urlDateFormat      = "2006-01-02"
 	userAgent          = "go-eodhd"
@@ -42,8 +42,10 @@ func GetFormatJson() *RequestFormat {
 }
 
 type RequestClient interface {
-	NewEodRequest(params UrlParamProvider, headers *map[string]string) (*retryablehttp.Request, error)
+	NewGetRequest(requestUrl string, headers *map[string]string) (*retryablehttp.Request, error)
 	Do(req *retryablehttp.Request, data interface{}) (*Response, error)
+	GetApiToken() string
+	GetBaseUrl() *url.URL
 }
 
 type Client struct {
@@ -55,8 +57,8 @@ type Client struct {
 	UserAgent     string
 
 	// services
-	urlBuilder   *UrlBuilder
-	OhlcvService *OhlcvService
+	OhlcvService     *OhlcvService
+	ExchangesService *ExchangesService
 }
 
 func NewClient(token string) (*Client, error) {
@@ -96,17 +98,10 @@ func NewClient(token string) (*Client, error) {
 		RetryMax:     5,
 	}
 
-	client.urlBuilder = NewUrlBuilder(client)
 	client.OhlcvService = NewOhlcvService(client)
+	client.ExchangesService = NewExchangesService(client)
 
 	return client, nil
-}
-
-type UrlClient interface {
-	GetApiToken() string
-	GetCountryCode() string
-	GetBaseUrl() *url.URL
-	GetDefaultFormat() RequestFormat
 }
 
 func (c *Client) GetApiToken() string {
@@ -140,16 +135,7 @@ func (c *Client) setBaseUrl(urlStr string) error {
 	return nil
 }
 
-func (c *Client) BuildUrl(params UrlParamProvider) (string, error) {
-	return c.urlBuilder.BuildUrl(params)
-}
-
-func (c *Client) NewEodRequest(params UrlParamProvider, headers *map[string]string) (*retryablehttp.Request, error) {
-	urlStr, err := c.BuildUrl(params)
-	if err != nil {
-		return nil, err
-	}
-
+func (c *Client) NewGetRequest(requestUrl string, headers *map[string]string) (*retryablehttp.Request, error) {
 	reqHeaders := make(http.Header)
 	if c.UserAgent != "" {
 		reqHeaders.Set("User-Agent", c.UserAgent)
@@ -161,7 +147,7 @@ func (c *Client) NewEodRequest(params UrlParamProvider, headers *map[string]stri
 		}
 	}
 
-	req, err := retryablehttp.NewRequest("GET", urlStr, nil)
+	req, err := retryablehttp.NewRequest("GET", requestUrl, nil)
 	if err != nil {
 		return nil, err
 	}
