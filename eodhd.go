@@ -1,9 +1,17 @@
 package eodhd
 
 import (
+	"context"
+	"encoding/json"
+	"github.com/gocarina/gocsv"
+	"github.com/hashicorp/go-cleanhttp"
+	"github.com/hashicorp/go-retryablehttp"
+	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type RequestFormat string
@@ -21,7 +29,7 @@ const (
 )
 
 type Client struct {
-	client        *http.Client
+	client        *retryablehttp.Client
 	baseUrl       *url.URL
 	apiToken      string
 	countryCode   string
@@ -35,7 +43,6 @@ type Client struct {
 func NewClient(token string) (*Client, error) {
 	client := &Client{
 		apiToken:      token,
-		client:        &http.Client{},
 		countryCode:   defaultCountryCode,
 		defaultFormat: FormatCSV,
 		UserAgent:     userAgent,
@@ -43,6 +50,31 @@ func NewClient(token string) (*Client, error) {
 	err := client.setBaseUrl(defaultBaseUrl)
 	if err != nil {
 		return nil, err
+	}
+
+	client.client = &retryablehttp.Client{
+		CheckRetry: func(ctx context.Context, resp *http.Response, err error) (bool, error) {
+			if ctx.Err() != nil {
+				return false, ctx.Err()
+			}
+			if err != nil {
+				return false, err
+			}
+			if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+				return true, nil
+			}
+			return false, nil
+		},
+		Backoff: func(min, max time.Duration, attemptNum int, resp *http.Response) time.Duration {
+			min = 1 * time.Second
+			max = 2 * time.Second
+			return retryablehttp.LinearJitterBackoff(min, max, attemptNum, resp)
+		},
+		ErrorHandler: retryablehttp.PassthroughErrorHandler,
+		HTTPClient:   cleanhttp.DefaultClient(),
+		RetryWaitMin: 250 * time.Millisecond,
+		RetryWaitMax: 1 * time.Second,
+		RetryMax:     5,
 	}
 
 	client.urlBuilder = NewUrlBuilder(client)
@@ -88,8 +120,102 @@ func (c *Client) setBaseUrl(urlStr string) error {
 	return nil
 }
 
-// BuildUrl TODO building the URL params should potentially be exposed through the client.
-// Otherwise, this could be good enough for now
 func (c *Client) BuildUrl(params UrlParamProvider) (string, error) {
 	return c.urlBuilder.BuildUrl(params)
+}
+
+func (c *Client) NewEodRequest(params UrlParamProvider, headers *map[string]string) (*retryablehttp.Request, error) {
+	urlStr, err := c.BuildUrl(params)
+	if err != nil {
+		return nil, err
+	}
+
+	reqHeaders := make(http.Header)
+	if c.UserAgent != "" {
+		reqHeaders.Set("User-Agent", c.UserAgent)
+	}
+
+	if headers != nil {
+		for k, v := range *headers {
+			reqHeaders.Set(k, v)
+		}
+	}
+
+	req, err := retryablehttp.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range reqHeaders {
+		req.Header[k] = v
+	}
+
+	return req, nil
+}
+
+type Response struct {
+	*http.Response
+
+	RateLimit          int
+	RateLimitRemaining int
+}
+
+const (
+	RateLimitHeader          = "X-RateLimit-Limit"
+	RateLimitRemainingHeader = "X-RateLimit-Remaining"
+)
+
+func newResponse(response *http.Response) *Response {
+	r := &Response{Response: response}
+	r.SetHeaderValues()
+	return r
+}
+
+func (r *Response) SetHeaderValues() {
+	if limit := r.Header.Get(RateLimitHeader); limit != "" {
+		r.RateLimit, _ = strconv.Atoi(limit)
+	}
+	if remaining := r.Header.Get(RateLimitRemainingHeader); remaining != "" {
+		r.RateLimitRemaining, _ = strconv.Atoi(remaining)
+	}
+}
+
+func (c *Client) Do(req *retryablehttp.Request, data interface{}) (*Response, error) {
+	// TODO add limiter
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+		_, _ = io.Copy(io.Discard, resp.Body)
+	}()
+	response := newResponse(resp)
+
+	reqFormat := req.URL.Query().Get("fmt")
+	format := FormatCSV
+	if reqFormat != "" {
+		format = RequestFormat(reqFormat)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if format == FormatCSV {
+		err = gocsv.UnmarshalBytes(bodyBytes, data)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		err = json.Unmarshal(bodyBytes, data)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return response, err
 }
