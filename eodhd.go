@@ -9,11 +9,13 @@ import (
 	"github.com/gocarina/gocsv"
 	"github.com/hashicorp/go-cleanhttp"
 	"github.com/hashicorp/go-retryablehttp"
+	"golang.org/x/time/rate"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,6 +31,11 @@ const (
 const (
 	formatJson RequestFormat = "json"
 	formatCSV  RequestFormat = "csv"
+)
+
+const (
+	DefaultRateLimitPercent = 0.75
+	DefaultBurstPercent     = 0.25
 )
 
 func GetFormatCsv() *RequestFormat {
@@ -56,6 +63,11 @@ type Client struct {
 	defaultFormat RequestFormat
 	UserAgent     string
 
+	limiter           *rate.Limiter
+	maxPercentOfLimit float64
+	limiterBurst      float64
+	configureOnce     sync.Once
+
 	// services
 	OhlcvService     *OhlcvService
 	ExchangesService *ExchangesService
@@ -63,12 +75,14 @@ type Client struct {
 	BulkEodService   *BulkEodService
 }
 
-func NewClient(token string) (*Client, error) {
+func NewClient(token string, options ...ClientOption) (*Client, error) {
 	client := &Client{
-		apiToken:      token,
-		countryCode:   defaultCountryCode,
-		defaultFormat: formatCSV,
-		UserAgent:     userAgent,
+		apiToken:          token,
+		countryCode:       defaultCountryCode,
+		defaultFormat:     formatCSV,
+		UserAgent:         userAgent,
+		maxPercentOfLimit: DefaultRateLimitPercent,
+		limiterBurst:      DefaultBurstPercent,
 	}
 	err := client.setBaseUrl(defaultBaseUrl)
 	if err != nil {
@@ -105,7 +119,21 @@ func NewClient(token string) (*Client, error) {
 	client.TickerService = NewTickerService(client)
 	client.BulkEodService = NewBulkEodService(client)
 
+	err = client.applyOptions(options...)
+
 	return client, nil
+}
+
+func (c *Client) applyOptions(options ...ClientOption) error {
+	for _, fn := range options {
+		if fn != nil {
+			err := fn(c)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (c *Client) GetApiToken() string {
@@ -163,6 +191,23 @@ func (c *Client) NewGetRequest(requestUrl string, headers *map[string]string) (*
 	return req, nil
 }
 
+func (c *Client) configureRateLimiter(ctx context.Context, limitAmt int) {
+	// Rate Limit is provided as per minute by EODHD
+	rl := float64(limitAmt) / 60.0
+
+	limit := rate.Limit(rl * c.maxPercentOfLimit)
+	burst := 1
+
+	if int(rl*c.limiterBurst) > 1 {
+		burst = int(rl * c.limiterBurst)
+	}
+
+	c.limiter = rate.NewLimiter(limit, burst)
+
+	// wait since we get the limit from the http headers of a response
+	_ = c.limiter.Wait(ctx)
+}
+
 type Response struct {
 	*http.Response
 
@@ -190,8 +235,6 @@ func (r *Response) SetHeaderValues() {
 	}
 }
 
-// Do - Execute HTTP Requests
-// TODO - add a configurable rate limiter
 func (c *Client) Do(req *retryablehttp.Request, data interface{}) (*Response, error) {
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -202,7 +245,12 @@ func (c *Client) Do(req *retryablehttp.Request, data interface{}) (*Response, er
 		_ = resp.Body.Close()
 		_, _ = io.Copy(io.Discard, resp.Body)
 	}()
+
 	response := newResponse(resp)
+
+	// Configure the limiter on the first request made
+	// Only do this once.
+	c.configureOnce.Do(func() { c.configureRateLimiter(req.Context(), response.RateLimit) })
 
 	reqFormat := req.URL.Query().Get("fmt")
 	format := formatCSV
