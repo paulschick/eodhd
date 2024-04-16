@@ -28,3 +28,28 @@ func (o *Ohlcv) ParseDate() error {
 	o.DateParsed = &t
 	return nil
 }
+
+type OhlcvService struct {
+	c RequestClient
+}
+
+func NewOhlcvService(c RequestClient) *OhlcvService {
+	return &OhlcvService{
+		c: c,
+	}
+}
+
+func (o *OhlcvService) GetCandles(params UrlParamProvider) ([]*Ohlcv, *Response, error) {
+	req, err := o.c.NewEodRequest(params, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var ohlcv []*Ohlcv
+	resp, err := o.c.Do(req, &ohlcv)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return ohlcv, resp, nil
+}

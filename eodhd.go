@@ -27,9 +27,24 @@ const (
 )
 
 const (
-	FormatJson RequestFormat = "json"
-	FormatCSV  RequestFormat = "csv"
+	formatJson RequestFormat = "json"
+	formatCSV  RequestFormat = "csv"
 )
+
+func GetFormatCsv() *RequestFormat {
+	f := formatCSV
+	return &f
+}
+
+func GetFormatJson() *RequestFormat {
+	f := formatJson
+	return &f
+}
+
+type RequestClient interface {
+	NewEodRequest(params UrlParamProvider, headers *map[string]string) (*retryablehttp.Request, error)
+	Do(req *retryablehttp.Request, data interface{}) (*Response, error)
+}
 
 type Client struct {
 	client        *retryablehttp.Client
@@ -40,14 +55,15 @@ type Client struct {
 	UserAgent     string
 
 	// services
-	urlBuilder *UrlBuilder
+	urlBuilder   *UrlBuilder
+	OhlcvService *OhlcvService
 }
 
 func NewClient(token string) (*Client, error) {
 	client := &Client{
 		apiToken:      token,
 		countryCode:   defaultCountryCode,
-		defaultFormat: FormatCSV,
+		defaultFormat: formatCSV,
 		UserAgent:     userAgent,
 	}
 	err := client.setBaseUrl(defaultBaseUrl)
@@ -81,6 +97,7 @@ func NewClient(token string) (*Client, error) {
 	}
 
 	client.urlBuilder = NewUrlBuilder(client)
+	client.OhlcvService = NewOhlcvService(client)
 
 	return client, nil
 }
@@ -183,9 +200,9 @@ func (r *Response) SetHeaderValues() {
 	}
 }
 
+// Do - Execute HTTP Requests
+// TODO - add a configurable rate limiter
 func (c *Client) Do(req *retryablehttp.Request, data interface{}) (*Response, error) {
-	// TODO add limiter
-
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -198,7 +215,7 @@ func (c *Client) Do(req *retryablehttp.Request, data interface{}) (*Response, er
 	response := newResponse(resp)
 
 	reqFormat := req.URL.Query().Get("fmt")
-	format := FormatCSV
+	format := formatCSV
 	if reqFormat != "" {
 		format = RequestFormat(reqFormat)
 	}
@@ -208,7 +225,7 @@ func (c *Client) Do(req *retryablehttp.Request, data interface{}) (*Response, er
 		return nil, err
 	}
 
-	if format == FormatCSV {
+	if format == formatCSV {
 		err = gocsv.UnmarshalBytes(bodyBytes, data)
 		if err != nil {
 			return nil, err

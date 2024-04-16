@@ -29,7 +29,7 @@ type UrlParams struct {
 	ToTime   *time.Time     `url:"-"`
 	From     *string        `url:"from,omitempty"`
 	To       *string        `url:"from,omitempty"`
-	ApiKey   string         `url:"api_key"`
+	ApiToken string         `url:"api_token"`
 }
 
 type UrlParamProvider interface {

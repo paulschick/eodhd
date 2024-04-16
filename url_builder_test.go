@@ -31,7 +31,7 @@ func (t *testUrlProvider) GetBaseUrl() *url.URL {
 }
 
 func (t *testUrlProvider) GetDefaultFormat() RequestFormat {
-	return FormatCSV
+	return formatCSV
 }
 
 func TestUrlBuilder_BuildUrl_NoTime(t *testing.T) {
@@ -39,13 +39,12 @@ func TestUrlBuilder_BuildUrl_NoTime(t *testing.T) {
 		BaseUrlStr: "https://test.com/api/",
 		ApiKey:     "test-key",
 	}
-	expected1 := "https://test.com/api/AAPL.US?api_key=test-key&fmt=json"
+	expected1 := "https://test.com/api/AAPL.US?api_token=test-key&fmt=json"
 	builder := NewUrlBuilder(urlProvider)
-	format1 := FormatJson
 	params := &UrlParams{
-		Symbol: "AAPL",
-		ApiKey: "test-key",
-		Format: &format1,
+		Symbol:   "AAPL",
+		ApiToken: "test-key",
+		Format:   GetFormatJson(),
 	}
 
 	urlStr1, err := builder.BuildUrl(params)
@@ -63,14 +62,13 @@ func TestUrlBuilder_BuildUrl_FromTime(t *testing.T) {
 		ApiKey:     "test-key",
 	}
 	fromTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	expected := "https://test.com/api/AAPL.US?api_key=test-key&fmt=csv&from=2024-01-01"
+	expected := "https://test.com/api/AAPL.US?api_token=test-key&fmt=csv&from=2024-01-01"
 	builder := NewUrlBuilder(urlProvider)
 
-	format := FormatCSV
 	params := &UrlParams{
 		Symbol:   "AAPL",
-		ApiKey:   "test-key",
-		Format:   &format,
+		ApiToken: "test-key",
+		Format:   GetFormatCsv(),
 		FromTime: &fromTime,
 	}
 	result, err := builder.BuildUrl(params)
