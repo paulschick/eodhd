@@ -60,6 +60,7 @@ type Client struct {
 	OhlcvService     *OhlcvService
 	ExchangesService *ExchangesService
 	TickerService    *TickerService
+	BulkEodService   *BulkEodService
 }
 
 func NewClient(token string) (*Client, error) {
@@ -102,6 +103,7 @@ func NewClient(token string) (*Client, error) {
 	client.OhlcvService = NewOhlcvService(client)
 	client.ExchangesService = NewExchangesService(client)
 	client.TickerService = NewTickerService(client)
+	client.BulkEodService = NewBulkEodService(client)
 
 	return client, nil
 }
