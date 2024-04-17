@@ -120,6 +120,9 @@ func NewClient(token string, options ...ClientOption) (*Client, error) {
 	client.BulkEodService = NewBulkEodService(client)
 
 	err = client.applyOptions(options...)
+	if err != nil {
+		return nil, err
+	}
 
 	return client, nil
 }
