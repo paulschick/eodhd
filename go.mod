@@ -1,4 +1,4 @@
-module eodhd
+module github.com/paulschick/eodhd
 
 go 1.22.2
 

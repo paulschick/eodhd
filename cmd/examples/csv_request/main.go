@@ -1,8 +1,8 @@
 package main
 
 import (
-	"eodhd"
 	"fmt"
+	"github.com/paulschick/eodhd"
 	"log"
 	"os"
 	"time"
