@@ -1,6 +1,6 @@
 module github.com/paulschick/eodhd
 
-go 1.22.2
+go 1.25.0
 
 require (
 	github.com/gocarina/gocsv v0.0.0-20231116093920-b87c2d0e983a
@@ -9,4 +9,4 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.5
 )
 
-require golang.org/x/time v0.5.0
+require golang.org/x/time v0.15.0
