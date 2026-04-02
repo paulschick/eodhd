@@ -9,8 +9,8 @@ type ClientOption func(*Client) error
 
 func SetPercentOfRateLimit(maxPercent float64) ClientOption {
 	return func(c *Client) error {
-		if maxPercent > 1 {
-			return errors.New("max percent must be less than 1")
+		if maxPercent < 0 || maxPercent > 1{
+			return errors.New("max percent must be between 0 (exclusive) and 1 (inclusive)")
 		}
 		burst := 1 - maxPercent
 		c.maxPercentOfLimit = maxPercent
