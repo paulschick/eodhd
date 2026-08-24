@@ -231,10 +231,10 @@ func newResponse(response *http.Response) *Response {
 
 func (r *Response) SetHeaderValues() {
 	if limit := r.Header.Get(RateLimitHeader); limit != "" {
-		r.RateLimit, _ = strconv.Atoi(limit)
+		if v, err := strconv.Atoi(limit); err == nil { r.RateLimit = v }
 	}
 	if remaining := r.Header.Get(RateLimitRemainingHeader); remaining != "" {
-		r.RateLimitRemaining, _ = strconv.Atoi(remaining)
+		if v, err := strconv.Atoi(remaining); err == nil { r.RateLimitRemaining = v }
 	}
 }
 
